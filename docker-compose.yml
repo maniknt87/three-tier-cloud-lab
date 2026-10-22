@@ -1,0 +1,45 @@
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-cloudlab}
+      MYSQL_USER: ${MYSQL_USER:-cloudlab}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-CloudLabPass123!}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-RootPass123!}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ucloudlab", "-pCloudLabPass123!"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://cloudlab:CloudLabPass123!@db:3306/cloudlab}
+      JWT_SECRET: ${JWT_SECRET:-replace-this-with-a-long-random-secret}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  mysql_data:
